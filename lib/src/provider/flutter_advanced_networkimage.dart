@@ -135,7 +135,7 @@ class AdvancedNetworkImage extends ImageProvider<AdvancedNetworkImage> {
   }
 
   @override
-  ImageStreamCompleter load(AdvancedNetworkImage key, DecoderCallback decode) {
+  ImageStreamCompleter load(AdvancedNetworkImage key, ImageDecoderCallback decode) {
     final chunkEvents = StreamController<ImageChunkEvent>();
 
     return MultiFrameImageStreamCompleter(
@@ -150,24 +150,25 @@ class AdvancedNetworkImage extends ImageProvider<AdvancedNetworkImage> {
   }
 
   Future<ui.Codec> _loadAsync(
-    AdvancedNetworkImage key,
-    DecoderCallback decode,
-    StreamController<ImageChunkEvent> chunkEvents,
-  ) async {
+      AdvancedNetworkImage key,
+      ImageDecoderCallback decode,
+      StreamController<ImageChunkEvent> chunkEvents,
+      ) async {
     assert(key == this);
+
+    ImmutableBuffer buffer;
 
     if (useDiskCache) {
       try {
         Uint8List? _diskCache = await loadFromDiskCache();
         if (_diskCache != null) {
-          if (key.postProcessing != null)
+          if (key.postProcessing != null) {
             _diskCache = (await key.postProcessing!(_diskCache)) ?? _diskCache;
+          }
           if (key.loadedCallback != null) key.loadedCallback!();
-          return decode(
-            _diskCache,
-            cacheWidth: key.width,
-            cacheHeight: key.height,
-          );
+
+          buffer = await ImmutableBuffer.fromUint8List(_diskCache);
+          return decode(buffer);
         }
       } catch (e) {
         if (key.printError) print(e);
@@ -185,34 +186,30 @@ class AdvancedNetworkImage extends ImageProvider<AdvancedNetworkImage> {
         printError: key.printError,
       );
       if (imageData != null) {
-        if (key.postProcessing != null)
+        if (key.postProcessing != null) {
           imageData = (await key.postProcessing!(imageData)) ?? imageData;
+        }
         if (key.loadedCallback != null) key.loadedCallback!();
-        return decode(
-          imageData,
-          cacheWidth: key.width,
-          cacheHeight: key.height,
-        );
+
+        buffer = await ImmutableBuffer.fromUint8List(imageData);
+        return decode(buffer);
       }
     }
 
     if (key.loadFailedCallback != null) key.loadFailedCallback!();
+
     if (key.fallbackAssetImage != null) {
       ByteData imageData = await rootBundle.load(key.fallbackAssetImage!);
-      return decode(
-        imageData.buffer.asUint8List(),
-        cacheWidth: key.width,
-        cacheHeight: key.height,
-      );
+      buffer = await ImmutableBuffer.fromUint8List(imageData.buffer.asUint8List());
+      return decode(buffer);
     }
-    if (key.fallbackImage != null)
-      return decode(
-        key.fallbackImage!,
-        cacheWidth: key.width,
-        cacheHeight: key.height,
-      );
 
-    return Future.error(StateError('Failed to load $url.'));
+    if (key.fallbackImage != null) {
+      buffer = await ImmutableBuffer.fromUint8List(key.fallbackImage!);
+      return decode(buffer);
+    }
+
+    return Future.error(StateError('Failed to load ${key.url}.'));
   }
 
   /// Load the disk cache
@@ -298,10 +295,6 @@ class AdvancedNetworkImage extends ImageProvider<AdvancedNetworkImage> {
         ? url == typedOther.url && scale == typedOther.scale
         : id == typedOther.id;
   }
-
-  @override
-  int get hashCode => ui.hashValues(url, scale, useDiskCache, retryLimit,
-      retryDuration, retryDurationFactor, timeoutDuration);
 
   @override
   String toString() => '$runtimeType('

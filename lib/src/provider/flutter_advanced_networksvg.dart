@@ -241,10 +241,6 @@ class AdvancedNetworkSvg extends PictureProvider<AdvancedNetworkSvg, Uint8List?>
   }
 
   @override
-  int get hashCode => ui.hashValues(url, scale, useDiskCache, retryLimit,
-      retryDuration, retryDurationFactor, timeoutDuration);
-
-  @override
   String toString() => '$runtimeType('
       '"$url",'
       'scale: $scale,'
